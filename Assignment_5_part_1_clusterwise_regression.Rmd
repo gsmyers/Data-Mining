@@ -1,0 +1,86 @@
+---
+Date: 2/21/18
+Title: Assignment_41_Glynis_Myers
+---
+
+#Assignment 5 - Part 1 - Glynis Myers
+##Data Mining
+###March 11, 2018
+
+####Question 1 - use training and holdout samples from logistic regression
+
+```{r}
+datapath <- "C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining"
+setwd("C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining")
+source('clustreg.txt')
+```
+```{r,fig.show='hide',results='hide'}
+source('Assignment_4_part_1.r')
+
+```
+
+####Question 2 - clusterwise regression model
+
+```{r}
+
+Train <- Train[c(6,9,12,14,17,19)]
+Holdout <- Holdout[c(6,9,12,14,17,19)]
+
+clust1 <- clustreg(Train,1,10,15,3)
+clust2 <- clustreg(Train,2,10,15,3)
+clust3 <- clustreg(Train,3,10,15,3)
+
+rsquared <- c(clust1$rsq.best,clust2$rsq.best,clust3$rsq.best)
+
+barplot(rsquared,names.arg=1:3, ylim = c(0,1))
+text(1:3, rsquared,labels = round(rsquared,2),pos = 3, cex = 0.8)
+
+```
+
+As can be seen in the barplot, there is a dramatic difference between using 1 cluster and 2.  A minimum of 2 clusters should be used which makes sense since 1 cluster would just be the full dataset.  Evualuating whether or not it should be 2 or 3 clusters will be identified later.
+
+
+####Question 3 - Perform holdout validation
+
+```{r}
+source('clustreg.predict.txt')
+#clust1$results
+
+
+holdoutval1 <- clustreg.predict(clust1, Holdout)
+holdoutval2 <- clustreg.predict(clust2, Holdout)
+holdoutval3 <- clustreg.predict(clust3, Holdout)
+```
+
+
+
+####Question 4 - Choose a model with the best regression interpretation
+```{r}
+round(holdoutval1$rsq,2)
+round(clust1$rsq.best,2)
+
+round(prop.table(table((holdoutval1$cluster))),3)
+round(prop.table(table((clust1$cluster))),3)
+
+
+round(holdoutval2$rsq,2)
+round(clust2$rsq.best,2)
+
+round(prop.table(table((holdoutval2$cluster))),3)
+round(prop.table(table((clust2$cluster))),3)
+
+round(holdoutval3$rsq,2)
+round(clust3$rsq.best,2)
+
+round(prop.table(table((holdoutval3$cluster))),3)
+round(prop.table(table((clust3$cluster))),3)
+```
+
+
+
+####Question 5 - summarize your results
+The r squared for 1 cluster is very small but it's distribution is 100% as it is just the full model so this one is easily deselected.
+
+Now, looking at cluster 2 versus cluster 3, the r squared for Train and Holdout of cluster 2 is lower and less stable as it changes quite a bit between Train and Holdout, yet the distribution of clusters is very consistent in Train and Holdout.  Cluster 3 has a much higher r squared, and it looks to be more stable, yet the distributions aren't as close as they are in cluster 2.  That being said, the distribution from Train to Holdout are still very close for cluster 3.
+
+Ultimately I will select cluster 3 as it has a higher r squared and the distribution is fairly stable.

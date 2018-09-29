@@ -1,0 +1,123 @@
+---
+Date: 2/21/18
+Title: Assignment_41_Glynis_Myers
+---
+
+#Assignment 4 - Part 1 - Glynis Myers
+##Data Mining
+##February 25, 2018
+
+##Question 1 - Generate training and holdout samples for the GermanCredit data set, sizes 700 and 300
+
+```{r}
+dataPath <- "C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining"
+
+GermanCredit <- read.csv(paste(dataPath,'german_credit.csv',sep = '/'), header=TRUE)
+
+set.seed(10)
+indexes=sort(sample(1:nrow(GermanCredit), size = .3*nrow(GermanCredit)))
+Holdout = GermanCredit[indexes,]
+Train = GermanCredit[-indexes,]
+
+```
+
+
+##Question 2 - Build a logistic regression model on Creditability
+
+```{r, echo=TRUE, results='hide'}
+summary(glm(formula = Creditability~., data = Train, family=binomial(link=logit)))
+
+# AIC 714.63
+
+summary(glm(formula = Creditability~Account.Balance+Duration.of.Credit..month., data = Train, family=binomial(link=logit)))
+
+# AIC 742.57
+
+summary(glm(formula = Creditability~Payment.Status.of.Previous.Credit+Value.Savings.Stocks, data = Train, family=binomial(link=logit)))
+
+# AIC 807.68
+
+summary(glm(formula = Creditability~Account.Balance+Duration.of.Credit..month.+Payment.Status.of.Previous.Credit+Value.Savings.Stocks, data = Train, family=binomial(link=logit)))
+# AIC 718.26
+# lowest AIC is full model
+
+```
+
+In this case, and compared with the logistic models created manually, the full model appears to have the lowest AIC and thus making it the best model.  While it is the best model when looking manually, full models lead to overfitting and thus greater chances of bias.  In the next section, I will use other functions to determine the best model.
+
+
+##Question 3 - choose only main effects
+
+```{r, echo=TRUE, results='hide'}
+glmodel <- glm(formula = Creditability~., data = Train, family=binomial(link=logit))
+
+drop1(glmodel)
+library(MASS)
+step(glmodel)
+
+
+```
+
+```{r}
+glmnew <- glm(formula = Creditability ~ Account.Balance + Duration.of.Credit..month. + 
+    Payment.Status.of.Previous.Credit + Credit.Amount + Value.Savings.Stocks + 
+    Length.of.current.employment + Instalment.per.cent + Sex...Marital.Status + 
+    Most.valuable.available.asset + Type.of.apartment + No.of.dependents + 
+    Telephone + Foreign.Worker, family = binomial(link = logit), 
+    data = Train)
+
+glmnew$aic
+
+```
+
+
+Glmnew is the best model, as determined by the step function and has the lowest AIC. While I could have found this model manually, it would've taken much longer so the step function is a good option to use when dealing with a lot of variables.  The chosen logistic model function uses only the "main-effects" and is leaner than the full model.
+
+
+##Question 4 
+```{r}
+glmp=glmnew$fitted.values
+glmp[glmp>=0.5]=1
+glmp[glmp<0.5]=0
+
+(trainconf1 <- round(prop.table(table(Train$Creditability,glmp),1),2))  #verifying the accuracy
+round(prop.table(table(Train$Creditability,glmp),2),2)    #verifying the efficiency
+
+```
+
+While this model is really accurate in determining creditability = "1", it is not very accurate in terms of determining creditability ="0".  Because of this, I like the model relatively well but I think there are probably ways in which the accuracy could be improved and provides instances of consideration for future projects.  The accuracy must be verified each time.  While the accuracy for determining 0's is not great, it is an efficient model, yet the model should be successful in both accuracy and efficiency to be a good model.
+
+
+##Question 5a - perform holdout
+
+```{r}
+holdout <- predict(glmnew, type = "response", newdata = Holdout)
+
+holdout[holdout>=0.5]=1
+holdout[holdout<0.5]=0
+
+(holdconf1<-round(prop.table(table(Holdout$Creditability,holdout),1),2))
+round(prop.table(table(Holdout$Creditability,holdout),2),2)
+```
+
+
+The holdout results are very similar to the training confusion matrix which is a good thing.  This shows that the training set is a good representation of the test set and therefore a fair representation of this specific dataset.  In addition, the accuracy for 0's leads me to think that there is greater variability in low creditability users as there are fewer instances of 0's making it less streamlined than the information around 1's.
+
+
+##Question 5b - generate lift and AUC
+
+```{r}
+
+require(gains)
+gains(as.numeric(Train$Creditability),glmnew$fitted.values,10)
+plot(gains(as.numeric(Train$Creditability),glmnew$fitted.values,10))
+
+library(AUC)
+plot(roc(glmnew$fitted.values,factor(Train$Creditability)))
+areaundercurve <-auc(roc(glmnew$fitted.values,factor(Train$Creditability)))
+text(x=.8,y=0.5, labels = "AUROC = ")
+text(x=.91,y=0.5, labels = round(areaundercurve, 3))
+
+```
+
+The gains table and graph shows that while the confusion matrices showed that the predictions for 0's were not very accurate, the predicted means are actually very close to the actual mean values which means the model is actually a pretty good prediction/representation of the data. In addition, the receiver operating characteristic curve, while separates from the actual line >0 and <1, it converges to the same start and end points and increases in the same direction as the actual values.

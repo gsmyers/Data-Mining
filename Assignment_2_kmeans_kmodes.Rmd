@@ -1,0 +1,167 @@
+---
+Date: 1/18/18
+Title: Assignment_2_Glynis_Myers
+---
+
+#Assignment 2 - Glynis Myers
+##Data Mining
+##January 21, 2018
+
+#Question 1 - Selecting Numeric Variables
+
+```{r}
+datapath <- "C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining"
+
+source('komeans.txt')
+library(caret)
+
+data("GermanCredit")
+
+GermanNew <- GermanCredit[c(1:7)] # selecting the numeric Variables
+
+
+
+```
+
+
+#Question 2 - splitting into test and train
+
+```{r}
+set.seed(491)
+
+indexes=sort(sample(1:nrow(GermanCredit), size = .368*nrow(GermanCredit)))
+test = GermanNew[indexes,]
+train = GermanNew[-indexes,]
+
+# scaling the data
+trainingscale <- scale(train)
+testscale <- scale(test)
+
+# reducing the number of variables to look at
+trainingnew <- trainingscale[,c("Age", "Duration")]
+testnew <- testscale[,c("Age", "Duration")]
+
+
+```
+
+
+#Question 3 - looking at the VAF for each of the clusters
+
+```{r}
+vaf <- numeric(9)
+
+for (i in 2:10) {
+  km.object <- kmeans(trainingnew, centers = i, nstart = 100)
+  vaf[i-1] <- km.object$betweenss/km.object$totss
+}
+```
+
+
+#Question 4 - identifying ideal number of k-means clusters
+
+```{r}
+vaf
+```
+
+2 clusters doesn't have much representation but there appears to be a large jump to 3 clusters and then minimal improvements in variance explained for each subsequent cluster jump.
+
+
+#Question 5 - show the scree plot
+
+```{r}
+plot(2:10,vaf, "b")
+```
+
+#Question 6a
+There is a clear elbow at 3 clusters yet there appears to be a better spread using 4 clusters:
+
+```{r}
+kmeans(trainingnew, centers = 3, nstart = 100)$centers
+kmeans(trainingnew, centers = 4, nstart = 100)$centers
+```
+
+
+#Question 6c - looking at the holdout
+
+```{r}
+# selecting the 4 clusters kmeans solution 
+km.object.keep <- kmeans(trainingnew, centers = 4, nstart = 100)
+
+centroids <- km.object.keep$centers
+
+# holdout using the same centers as the train set
+testkmeans <- kmeans(testnew, centers = centroids)
+vaftest <- testkmeans$betweenss/testkmeans$totss
+
+#comparing VAF from test and train
+vafcompare <- data.frame(VAF.Test.Set = vaftest,VAF.Train.Set= vaf[4])
+
+#comparing size of clusters from test and train
+sizecompare <- data.frame(Kmeans.Test.Cluster.Size=testkmeans$size/sum(testkmeans$size),Kmeans.Train.Cluster.Size=km.object.keep$size/sum(km.object.keep$size))
+
+#comparing centers from test and train
+centercompare <- data.frame(Kmeans.Test.Center=testkmeans$centers,Kmeans.Train.Center=centroids)
+
+vafcompare
+sizecompare
+centercompare
+
+```
+
+All the clusters from test and train sets are pretty similar in terms of VAF, Size, and Centers with the exception of the Age centers for cluster 4 test versus train.
+
+
+
+#Question 7 - 3-5 komeans clusters
+
+```{r}
+ko.german3<-komeans(trainingnew,nclust=3,lnorm=2,tolerance=.001,nloops = 100,seed=3) 
+ko.german4<-komeans(trainingnew,nclust=4,lnorm=2,tolerance=.001,nloops = 100,seed=3) 
+ko.german5<-komeans(trainingnew,nclust=5,lnorm=2,tolerance=.001,nloops = 100,seed=3) 
+```
+
+
+#Question 8 - compare kmeans solution with komeans
+
+```{r}
+kovafcomp3 <- cbind(ko.german4$VAF,vaf[3])
+kovafcomp4 <- cbind(ko.german4$VAF,vaf[4])
+kovafcomp5 <- cbind(ko.german5$VAF,vaf[5])
+
+
+kovafcomp3
+kovafcomp4 # ko vaf compared to kmeans vaf is the closest
+kovafcomp5
+
+```
+
+The koverlapping VAF is higher than the kmean VAF implying that there is less loss of information with koverlapping means which intuitively makes sense since since it is a little bit more flexible of a solution and less rigid.
+
+
+#Question 9 - summarize the results and interpret clusters/ segments
+
+```{r}
+addmargins(table(km.object.keep$cluster,ko.german4$Group))
+```
+
+The komeans with the largest groups are 9, 3, 0, and 2.  Groups 9, 3, and 2 have the greatest overlap with kmeans clusters 3, 2, and 1 respectively so I will compare those group means to those cluster centers.  Group 0 is one of the largest komeans groups, yet its representation in the kmeans clusters is within clusters 2 and 3 which are already accounted for with komeans groups 3 and 9 and is a much smaller representation than those two so I have chosen to compare the next largets group, 13, to the kmeans cluster 4.
+
+
+```{r}
+data.frame(Kmeans=cbind(km.object.keep$centers),Komeans =rbind(cbind(mean(trainingnew[ko.german4$Group==2,1]),mean(trainingnew[ko.german4$Group==2,2])),
+      cbind(mean(trainingnew[ko.german4$Group==3,1]),mean(trainingnew[ko.german4$Group==3,2])),
+      cbind(mean(trainingnew[ko.german4$Group==9,1]),mean(trainingnew[ko.german4$Group==9,2])),
+      cbind(mean(trainingnew[ko.german4$Group==13,1]),mean(trainingnew[ko.german4$Group==13,2]))
+      
+            ))
+```
+
+The kmeans centers and komeans means are all relatively similar and are all directionally the same for each cluster in each variable which is good.  The biggest differrence that we see though is with Age and cluster 4 which is similar to what was seen with the test versus train sets.  Since the komeans VAF was higher than the kmeans, I would use the komeans groups to segment the participants.
+
+
+#Question 10 - Recruiting People for segments
+A) I would take the approach of cold calling people, using a mix of random sampling from available phone numbers in the US and potentially those who are already apart of the A&U listserv and ask them a variety of questions related to the study.  If someone does not answer, I would attempt to recall them, but would not do it exhaustively to save time and reduce stress on those I'm trying to recruit. 
+
+B) I would try to recruit consumers that come from a variety of races, genders, socioeconomic statuses, etc. I would try to get a sample of people that had a somewhat fair representation of the overall population to reduce bias in the study.
+
+C) I would identify if a new recruit belonged in a certain segment by their responses to the questionnaire and how similarly their responses are to those in the established segments.

@@ -1,0 +1,100 @@
+---
+Date: 2/21/18
+Title: Assignment_41_Glynis_Myers
+---
+
+#Assignment 4 - Part 2 - Glynis Myers
+##Data Mining
+##February 25, 2018
+
+##Question 1 - build classification model tree
+
+```{r}
+dataPath <- "C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining"
+
+GermanCredit <- read.csv(paste(dataPath,'german_credit.csv',sep = '/'), header=TRUE)
+
+#converting categorical variables to factors
+categorical <- c(1,2,4,5,7,8,10,11,13,15,16,18,20,21)
+for (i in categorical ){
+  GermanCredit[,i] <- factor(GermanCredit[,i])
+}
+
+set.seed(10)
+indexes=sort(sample(1:nrow(GermanCredit), size = .3*nrow(GermanCredit)))
+Holdout = GermanCredit[indexes,]
+Train = GermanCredit[-indexes,]
+
+require(rpart)
+
+treemod <- rpart(formula = Creditability~.-Creditability, method = "class",data = Train,control=rpart.control(cp=0,minsplit=30,xval=10, maxsurrogate = 0))
+par(mai=c(0.1,0.1,0.1,0.1))
+plot(treemod,main="Classification Tree",col=3, compress=TRUE, branch=0.2,uniform=TRUE)
+text(treemod,cex=0.6,col=4,use.n=TRUE,fancy=TRUE,fwidth=0.4,fheight=0.4,bg=c(5))
+
+
+```
+
+
+##Question 2 - Evaluate complexity parameter plot and print
+
+```{r}
+printcp(treemod)
+plotcp(treemod,minline=TRUE,col=4)
+bestcp <- treemod$cptable[which.min(treemod$cptable[,"xerror"]),"CP"]
+tree.pruned <- prune(treemod, cp = bestcp)
+
+par(mai=c(0.1,0.1,0.1,0.1))
+plot(tree.pruned,main="Classification Tree",col=3, compress=TRUE, branch=0.2,uniform=TRUE)
+text(tree.pruned,cex=0.6,col=4,use.n=TRUE,fancy=TRUE,fwidth=0.4,fheight=0.4,bg=c(5))
+
+
+```
+
+Based on the complexity parameter plots and prints the ideal tree model, with the lowest xerror, is the 4 nsplit tree with cp = 0.0172144.  This tree has 1 2-way split, 1 3-way split, 1 4-way split, and 1 5-way split.  This means that there are 4 interactions for this specific tree model.
+
+
+##Question 3 - generate confusion matrix
+
+```{r}
+table(Train$Creditability,predict(tree.pruned,type="class"))
+(trainconf2 <- round(prop.table(table(Train$Creditability,predict(tree.pruned,type="class")),1),2))        #row level #deparse laabel - labeling # accuracy
+round(prop.table(table(Train$Creditability,predict(tree.pruned,type="class")),2),2)        #column level #better split but why? # efficiency
+
+
+```
+
+How many interactions do you see? As detailed in the previous question, there a 4 interactions for this specific tree model.
+
+can you interpret the tree? do you like it?  Yes, the tree is easy to interpret, especially with this number of interactions.  It makes sense, in terms of creditability, as users with high account balances would likely have higher creditability, people with a shorter credit history would have low creditability, and so on.
+
+While the visual interpretation of the tree is easily understandable, the accuracy of the model for people without creditability ("0") is not very good, but the tree is very accurate when it comes to predicting users with high creditability ("1").  In addition, while it is not accurate for low creditability, it is efficient at reading these values.  Yet, as is seen in the confusion matrix, the number of 0's compared to 1's is significantly lower which may have impacted the accuracy for 0's.
+
+
+##Question 4 - perform holdout validation
+```{r}
+treeholdout <- predict(tree.pruned,newdata=Holdout,type="class")
+
+table(Holdout$Creditability,predict(tree.pruned,newdata=Holdout,type="class"))
+(holdconf2 <- round(prop.table(table(Holdout$Creditability,predict(tree.pruned,newdata=Holdout,type="class")),1),2) )
+round(prop.table(table(Holdout$Creditability,predict(tree.pruned,newdata=Holdout,type="class")),2),2) 
+
+
+```
+
+As was seen with the training set, the prediction of 1's is very accurate yet the model struggles to predict 0's accurately.  In addition, the efficiency of the model for the test set is not very efficient in identifying 0's but is still efficient for identifying 1's.
+
+
+##Question 5 - summarize findings
+```{r, results='hide'}
+source('Assignment_4_part_1.R') # sourcing assignment 1 in order to compare confusion matrices
+
+```
+```{r}
+cbind(trainconf1,trainconf2)
+cbind(holdconf1,holdconf2)
+
+```
+
+When comparing findings from the tree model to the logistic model from assignment 1, the results are very similar.  The confusion matrix from logistic regression was slightly better at predicting 0's yet was slightly less accurate at predicting 1's.  In addition, the holdout validation confusion set for logistic regression was better at predicting 0's than the tree model.  Overall, the logistic regression appears to have performed slightly better than the tree model for this particular case, yet both results were very similar.
+

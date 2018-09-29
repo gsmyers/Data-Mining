@@ -1,0 +1,84 @@
+---
+Date: 2/4/18
+Title: Assignment_2_Glynis_Myers
+---
+
+#Assignment 3 - Part 1 - Glynis Myers
+##Data Mining
+##February 4, 2018
+
+#Question 1 - Perform LCA on the categorical variables
+
+```{r}
+library(poLCA)
+dataPath <- "C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining"
+
+AssignmentData<- read.csv(paste(dataPath,'german_credit.csv',sep = '/'), header=TRUE)
+
+GermanNew <- AssignmentData[-c(1,3,4,5,6,9,11,12,14,15,17,19,20,21)]
+
+set.seed(492)
+indexes=sort(sample(1:nrow(AssignmentData), size = .368*nrow(AssignmentData)))
+test = GermanNew[indexes,]
+train = GermanNew[-indexes,]
+
+f1=cbind(Account.Balance,Length.of.current.employment,Sex...Marital.Status,Most.valuable.available.asset,Type.of.apartment,Occupation)~1  # chose these 6 variables as these seemed to have the mos variety and hopefully will provide an interesting range of people
+
+aic <- numeric(5)
+bic <- numeric(5)
+  
+for (i in 2:6) {
+  lc.res <- poLCA(f1,train,nclass=i,nrep=100,tol=.001,verbose=FALSE, graphs = FALSE)
+  aic[i-1] <- lc.res$aic
+  bic[i-1] <- lc.res$bic
+}
+```
+
+
+#Question 2 - determine 2,3,...,K class cluster/solutions
+
+```{r}
+x <- c(2:6)
+plot(x, aic, type ="b", ylab = "aic",
+     main = "AIC v. BIC", xlab = "Clusters",
+     col = "blue")
+par(new = TRUE)
+plot(x, bic, type = "b", xaxt = "n", yaxt = "n",
+     ylab = "", xlab = "", col = "red")
+axis(side = 4)
+mtext("bic", side = 4, line = 3)
+legend("topleft", c("aic", "bic"),
+       col = c("blue", "red"), lty = c(1, 1))
+```
+
+From here we can see that the optimal number of classes are in fact 4 latent classes as that is the point where there is a minimum between the two criterion.
+
+
+#Question 3 - perform holdout validation 
+
+```{r}
+lc.res4 <- poLCA(f1,train,nclass=4,nrep=100,tol=.001,verbose=FALSE, graphs = FALSE) # selecting the 4 cluster LCA 
+lcprobs4 <- lc.res4$probs
+
+lc.test <- poLCA(f1,test,nclass=4,nrep=100,tol=.001,verbose=FALSE, graphs = TRUE, probs.start = lcprobs4) # using class-conditional probabilities from train set
+
+# look at mixing proportions of train v test, aic and bic, class conditional probability
+
+data.frame(lc.res4$P, lc.test$P)
+data.frame(aic[4], lc.test$aic)
+data.frame(bic[4], lc.test$bic)
+c(lc.res4$probs[1],lc.test$probs[1],lc.res4$probs[3],lc.test$probs[3])
+
+
+
+
+```
+
+
+#Question 4 - provide implications/commentary on the goodness, interpretability, stability, and adequacy of the solutions
+
+While the model is a good fit for the second and fourth latent classes, as the sizes of train v test are about the same and the probabilities for each variable in that class are very similar, but the remaining classes are not very close at all in terms of size.  While the sizes vary, the distribution of class probabilities seems somewhat similar in class one and three implying that it is relatively stable.  Interpretability is pretty good for class 2 and 4 but the other classes are harder to interpret.  Because of this, the model is not very stable.  In addition, the BIC and AIC values differ quite a bit further showing that this model should be validated/tested on another test set or resampled as there is maybe not a fair representation of certain demographics in the train set.
+
+
+#Question 5 - comment on the similarity/differences between clustering solutions you get in assignment 1 and solution generated in LCA
+Both of these methods use clustering yet with LCA there is a more structured approach for selecting the ideal number of clusters.  Wit K-means clustering, the clusters were selected mostly by looking at the scree plot, identifying the elbow, and then making a decision from there and looking at the spread of the clusters.  While the LCA solution for this data proved somewhat unstable, there was a clear number of clusters to select by looking at the cross of the AIC and BIC.  In both cases, the test holdout varied from the train set, yet there was less discrepancy in K-means, potentially because K-means cluster is looking at numerical variables while LCA clusters based on categorical variables.

@@ -1,0 +1,159 @@
+---
+Date: 2/21/18
+Title: Assignment_41_Glynis_Myers
+---
+
+#Assignment 5 - Part 2 - Glynis Myers
+##Data Mining
+###March 11, 2018
+
+####Question 1 - use training and holdout samples from logistic regression
+
+```{r,echo=TRUE}
+datapath <- "C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining"
+setwd("C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining")
+library(MASS)
+library(rpart)
+```
+```{r,fig.show='hide',results='hide'}
+source('Assignment_4_part_1.r')
+
+```
+
+
+####Question 2 - build LDA and QDA
+
+```{r}
+
+ldatrain <- lda(Creditability~., data = Train)
+qdatrain <- qda(Creditability~., data = Train)
+
+plot(ldatrain)
+
+ldatrainclass <- predict(ldatrain)$class
+qdatrainclass <- predict(qdatrain)$class
+
+
+```
+
+
+####Question 3 - Perform holdout validation
+
+```{r}
+ldaholdout <- predict(ldatrain, newdata = Holdout)
+qdaholdout <- predict(qdatrain, newdata = Holdout)
+
+#table(Train$Creditability,ldaholdout$class)
+(ldatrainconf <- round(prop.table(table(Train$Creditability,ldatrainclass),1),2))
+(ldaholdoutconf <- round(prop.table(table(Holdout$Creditability,ldaholdout$class),1),2))
+
+(qdatrainconf <- round(prop.table(table(Train$Creditability,qdatrainclass),1),2))
+(qdaholdoutconf <-round(prop.table(table(Holdout$Creditability,qdaholdout$class),1),2)) # this is the best holdout validation
+```
+
+As we can see from these confusion matrices, the QDA function is better at predicting the values in terms of efficiency as well as accuracy.  The LDA results are similar to what was found in Logistic Regression and Classification Tree modelling for this sample set.
+
+
+####Question 4 - build an ensemble model
+
+#####Ensemble model
+```{r,fig.show='hide', results='hide'}
+source('Assignment_4_part_2.r')
+```
+```{r}
+ensemble.dat.train <-data.frame(glmp, as.numeric(treetrainpredict)-1,as.numeric(ldatrainclass)-1,as.numeric(qdatrainclass)-1,0) 
+#adding all values to a data frame and normalizing the values in order to build the ensemble model
+#initializing ensemble model variable in order to run the for loop
+
+colnames(ensemble.dat.train) <- c("Logistic Regression","Tree Model", "LDA Model", "QDA Model", "Ensemble")
+head(ensemble.dat.train) #quick view of the data
+
+```
+
+#####Creating train Ensemble Model
+```{r}
+for(i in 1:length(ensemble.dat.train$`Logistic Regression`)){
+  if(sum(ensemble.dat.train[i,1:4])>2){
+    ensemble.dat.train$Ensemble[i]<-1
+  } else if(sum(ensemble.dat.train[i,1:4])<2){
+    ensemble.dat.train$Ensemble[i]<-0
+  } else {
+    ensemble.dat.train$Ensemble[i]<-sample(0:1,1)
+  }
+}
+
+head(ensemble.dat.train,10) #quick QA on the results
+```
+
+#####confusion matrix of train Ensemble Model
+```{r}
+(ensembleconftrain <- round(prop.table(table(Train$Creditability,ensemble.dat.train$Ensemble),1),2))
+round(prop.table(table(Train$Creditability,ensemble.dat.train$Ensemble),2),2)
+```
+
+The ensemble model based on the train data set is slightly more accurate than LDA.  All 4 models will be compared at the end.
+
+
+#####ensemble model for test
+```{r}
+ensemble.dat.hout <-data.frame(holdoutlogreg, as.numeric(treeholdoutpredict)-1,as.numeric(ldaholdout$class)-1,as.numeric(qdaholdout$class)-1,0)
+colnames(ensemble.dat.hout) <- c("Logistic Regression","Tree Model", "LDA Model", "QDA Model", "Ensemble")
+```
+
+#####Creating test Ensemble Model
+```{r}
+for(i in 1:length(ensemble.dat.hout$`Logistic Regression`)){
+  if(sum(ensemble.dat.hout[i,1:4])>2){
+    ensemble.dat.hout$Ensemble[i]<-1
+  } else if(sum(ensemble.dat.hout[i,1:4])<2){
+    ensemble.dat.hout$Ensemble[i]<-0
+  } else {
+    ensemble.dat.hout$Ensemble[i]<-sample(0:1,1)
+  }
+}
+
+head(ensemble.dat.hout,10)
+```
+
+#####confusion matrix of test Ensemble Model
+```{r}
+(ensembleconfholdout <- round(prop.table(table(Holdout$Creditability,ensemble.dat.hout$Ensemble),1),2))
+round(prop.table(table(Holdout$Creditability,ensemble.dat.hout$Ensemble),2),2)
+```
+
+Similar to the train set, the accuracy for "0" values is about 50% while the accuracy for "1" is 84% which mirrors what was seen in Logistic Regression, Classification Trees, and LDA.
+
+####Question 5 - summarize your results
+#####Comparing all results
+```{r}
+#logistic regression train
+trainconflogreg
+#classification tree train
+trainconf2
+#lda train
+ldatrainconf
+#qda train
+qdatrainconf
+#ensemble train
+ensembleconftrain
+
+
+#holdout validation performances
+#logistic regression holdout
+holdconflogreg
+#classification tree holdout
+holdconf2
+#lda holdout
+ldaholdoutconf
+#qda holdout
+qdaholdoutconf
+#ensemble holdout
+ensembleconfholdout
+
+```
+
+As we can see the QDA model is the best performing in terms of accuracy of predicting "0" and "1" values for creditability.  It makes sense that the ensemble model is not the best model as the 3 (Logistic Regression, Classification Trees, and LDA) out of the 4 total models used are "Bad" or underperforming models in comparison to the QDA results and thus would shift the ensemble model.
+
+It is worth noting though, that using all 4 models makes the ensemble model slightly better than all 3 of the "bad" models.  This is likely due to the chances of 2 of the "bad" models matching with the QDA model.  In addition, it could also occur due to the tiebreaker since it randomly selects a "0" or "1" in this instance which could fall in favour of the "good" model.
+
+While QDA is the best model resulting in nearly 70% accuracy of predicting "0" values and almost 90% accuracy in predicting "1" values, when performing holdout validation, the 70% drops to 56% percent which is not that comforting of a result.  It is still very accurate in terms of predicting "1" values, but the "0" values struggle and I think that other models should be explored for this specific dataset.  Or maybe, build an ensemble model off of QDA and another top performing model.

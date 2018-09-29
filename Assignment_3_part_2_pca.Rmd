@@ -1,0 +1,146 @@
+---
+Date: 2/4/18
+Title: Assignment_2_Glynis_Myers
+---
+
+#Assignment 3 - Part 2 - Glynis Myers
+##Data Mining
+##February 4, 2018
+
+#Question 1 - split into train and test 70/30 respectively
+
+```{r}
+dataPath <- "C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining"
+
+GermanCredit<- read.csv(paste(dataPath,'german_credit.csv',sep = '/'), header=TRUE)
+
+GermanNew <- GermanCredit[c(3,6,9,12,14,17,19)] # selecting the numeric Variables / same variables as kmeans
+
+set.seed(491)
+indexes=sort(sample(1:nrow(GermanCredit), size = .3*nrow(GermanCredit)))
+test = GermanNew[indexes,]
+train = GermanNew[-indexes,]
+
+```
+
+
+#Question 2 - perform pca
+
+```{r}
+pca <- prcomp(train,scale=TRUE)
+```
+
+
+#Question 3 - generate scree plots
+
+```{r}
+# scree plot
+eigenvals <- cumsum((pca$sdev^2)/sum(pca$sdev^2))
+bp <- barplot(eigenvals, names.arg = c(1:7), ylim = c(0,1.1))
+text(bp, eigenvals, labels = round(eigenvals,2), pos = 3)
+
+```
+
+From here we can see that 5 is likely the most optimal solution as using all 7 would result in overfitting.  While 6 is not exactly 1, it still has a greater chance for overfitting than 5 does.
+
+
+#Question 4 - plot component 1 v all 
+
+```{r}
+round(head(pca$rotation),2)
+
+for (i in 2:5) {
+plot(pca$rotation[,1], pca$rotation[,i], xlab= "Comp. 1 Loadings",ylab= paste0("Comp. ",i, " Loadings"))
+text(pca$rotation[,1], pca$rotation[,i],labels = row.names(pca$rotation), pos = 1)
+}
+```
+
+###What do you think are the names of the components?
+PC1 v PC2 <- age and duration at current address appear to be more associated with PC2, whereas duration of credit and credit amount appear to be more associated  with PC1
+PC1 v PC3 <- Installment percent is more associated with PC3 
+PC1 v PC4 <- number of credits at this bank is the strongest association with PC4
+PC1 v PC5 <- lastly, PC 5 appears to have the greatest association with number of dependents
+
+So from these comparisons, I think these would be the most associated titles for each principal component.
+PC1 = Consumer Demographics
+PC2 = Credit History
+PC3 = Installment Percentage
+PC4 = Credits
+PC5 = Dependents
+
+
+#Question 5 - show component loadings are orthogonal
+
+```{r}
+round(cor(pca$rotation),2)
+# show that the loadings are orthogonal
+round(t(pca$rotation) %*% pca$rotation,2)
+# the loadings are orthogonal
+```
+
+The loadings are orthogonal as the dot product of each loading is zero every where else but the dot product of the loadings on themselves
+
+#Question 6 - show the scores are orthogonal
+
+```{r}
+# show the scores are orthogonal
+round(cov(pca$x),2)
+
+```
+
+As was seen with the dot product of the loadings, the scores are also orthogonal since only the values on the diagonal are populated
+
+
+#Question 7 - perform holdout
+
+```{r}
+scaletest <- scale(test)
+scaletrain <- scale(train)
+holdout <- predict(pca, newdata = scaletest)  # 7i predicting the component scores from the train set
+head(as.vector(holdout %*%  t(pca$rotation))) # 7ii matrix multiply predicted component loading scores and component loadings from training set
+
+```
+
+This shows us what the angle is between the predicted component scores and the component loading scores from the training set.  It also shows us that  the two sets loading scores are not orthogonal.
+
+
+#Question 8 - commpute variance accounted for in the holdout sample
+
+```{r}
+round(cor(as.vector(scaletest), as.vector(holdout %*%  t(pca$rotation))),2)
+# positive correlation
+
+```
+
+
+#Question 9 - rotate the component loadings using varimax
+
+```{r}
+rotates=varimax(pca$rotation)
+rotates
+cor(as.vector(scale(train)), as.vector(pca$x %*% rotates$rotmat %*% t(rotates$rotmat) %*% t(pca$rotation)))
+
+```
+
+As is expected, since the loadings are same, just rotated, they have 100% positive correlation
+
+
+#Question 10 - plot rotated loadings 1 versus 2 & 3 
+
+```{r}
+for (i in 2:3) {
+plot(rotates$rotmat[,1], rotates$rotmat[,i], xlab= "Rotate Comp. 1 Loadings",ylab= paste0("Rotate Comp. ",i, " Loadings"))
+text(rotates$rotmat[,1], rotates$rotmat[,i],labels = row.names(pca$rotation), pos = 1)
+}
+```
+
+###Did PCA reduce this data a lot?
+###Do you like the solution?
+
+The data was shifted a bit and the previously established components need to be adjusted but the new associations seem to make slightly more sense in terms of groupings and are slightly easier to read.  Based on these shifts, I would rename the groups as follows:
+
+Rotated Loadings 1 <- number of dependents + duration of credits = Credit Risks
+Rotated Loadings 2 <- number of credits at this bank + credit amounts = Credit History
+Rotated Loadings 3 <- Installment Percent = Installment Percentage
+Rotated Loadings 4 <- duration in current address = Length of Stay
+Rotated Loadings 4 <- Age = Age

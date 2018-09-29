@@ -1,0 +1,150 @@
+---
+Date: 3/4/18
+Title: Assignment_41_Glynis_Myers
+---
+
+#Assignment 1 - Glynis Myers
+##Data Mining
+###March 11, 2018
+
+####Question 1 - build classification model tree
+
+```{r}
+dataPath <- "C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining"
+
+GermanCredit <- read.csv(paste(dataPath,'german_credit.csv',sep = '/'), header=TRUE)
+```
+
+
+####Question 2a - train and test
+```{r}
+set.seed(492)
+indexes=sort(sample(1:nrow(GermanCredit), size = .368*nrow(GermanCredit)))
+test = GermanCredit[indexes,]
+train = GermanCredit[-indexes,]
+
+trainrsquared <- numeric(1001) #pre allocating two vectors for my rsquared inputs
+testrsquared <- numeric(1001)
+```
+
+
+####Question 2b - Regression
+```{r}
+lmmod <- lm(train$Credit.Amount~., data = train)
+
+sumlmmod <- summary(lmmod)
+trainrsquared[1] <- sumlmmod$r.squared
+
+```
+
+
+####Question 2c - Save coefficients
+```{r}
+coeffs <- matrix(NA, nrow = 1001, ncol=length(lmmod$coefficients))
+coeffs[1,] <- lmmod$coefficients
+colnames(coeffs) <- names(lmmod$coefficients)
+testrsquared[1] <- (cor(test$Credit.Amount,predict(lmmod,test)))^2
+```
+
+
+####Question 3 - repeat steps 1000 times
+```{r}
+for(i in 2:1001){
+  indexes=sort(sample(1:nrow(GermanCredit), size = .368*nrow(GermanCredit)))
+  testrep = GermanCredit[indexes,]
+  trainrep = GermanCredit[-indexes,]
+  lmreps <- lm(trainrep$Credit.Amount~., data = trainrep)
+  coeffs[i,] <- lmreps$coefficients
+  trainrsquared[i] <- summary(lmreps)$r.squared
+  testrsquared[i] <- (cor(testrep$Credit.Amount,predict(lmreps,testrep)))^2
+
+}
+```
+
+
+####Question 4a - plot distribution of coefficients
+```{r}
+#only choosing to plot 4 distributions as an example of plots in order to reduce the number of plots in the rmd file
+for (i in 1:4){
+  hist(coeffs[,i],main=colnames(coeffs)[i], xlab=colnames(coeffs)[i])
+}
+
+
+```
+
+From these charts, we can see that the estimates are generally not stable especially since for Account Balance and Creditability have fat tails and appear slightly platykurtic.  In addition, Duration of Credit Month is slightly leptokurtic and doesn't have too fat of tails, but appears to have a slight lift in frequency towards the lower bound of the variable (similar to Account Balance).  Lastly, the intercept is slightly left-skewed which further implies instability of the results.
+
+
+####Question 4b - plot distribution of r squared
+```{r}
+hist(trainrsquared)
+hist(testrsquared)
+
+plot((trainrsquared-testrsquared)/testrsquared*100, type = "l") # Percent Fall of r squared
+
+```
+
+Similar to the variable performances, the rsquared performances are very skewed.  The tails are very fat for both and there is near a 15 point difference in the train r squareds and an even bigger range for test at a 20 point difference.  In addition, the percent differences between the rsquared, or percent fall, ranges from little to no percent difference all the way up to a 50% difference in the train and test r squared.  This further validates the point that the model run over and over again produces unstable results, yet on a whole, as will be seen later, it can be informative.
+
+
+####Question 5 - compute the averages of all the coefficients
+```{r}
+
+(coeffsavg <- sapply(data.frame(coeffs), FUN=mean))
+
+```
+
+####Question 6 - compute the standard deviation of all the coefficients
+```{r}
+
+(coeffssd <- sapply(data.frame(coeffs), sd))
+```
+
+####Question 7 - compare averages to full lm model
+```{r}
+fulllm <- lm(Credit.Amount~., data = GermanCredit)
+
+comparison <- data.frame(cbind(fulllm$coefficients,coeffsavg,
+      (fulllm$coefficients-coeffsavg)/fulllm$coefficients*100))
+colnames(comparison) <- c("Full Model Coefficients","Avg Coefficients", "Percent Difference")
+comparison
+```
+The averages for the mutated model and the coefficients of the full model are very similar to most variables having less than a 1% difference.  Account Balance has a 60% difference, but that is due to the fact that the coefficient (full model) and averages (mutated model) for this variable are very very small.  This is seen across a few of the variables whose means are less than 100.  In general, the averages are very similar to the full model.
+
+
+####Question 8a - compute confidence intervals
+```{r}
+
+confidints <-data.frame(1:length(names(lmmod$coefficients)),1:length(names(lmmod$coefficients)), row.names = names(lmmod$coefficients))
+
+
+for(i in 1:length(names(lmmod$coefficients))){
+  confidints[i,] <- round(quantile(sort(coeffs[,i]), probs = c(0.025,0.975)),2)
+}
+
+
+rownames(confidints) <- c(names(lmmod$coefficients))
+colnames(confidints) <- c("2.5%","97.5%")
+confidints 
+```
+
+
+####Question 8b - scale CI by a factor of 632^0.5
+```{r}
+leftbound <- coeffsavg-sqrt(0.632)*(coeffsavg-confidints[,1]) #need to scale the mutated model as it was performed on a smaller subset which would mean the full model would outperform this one since it was looking at more values
+rightbound <- coeffsavg-sqrt(0.632)*(coeffsavg-confidints[,2])
+
+#create a dataframe of the mutated confidence intervals
+mutatesadjci <- data.frame(cbind(leftbound,rightbound,rightbound-leftbound))
+colnames(mutatesadjci) <- c("M 2.5%","M 97.5%", "M Difference")
+
+#create a dataframe of the full model confidence intervals
+cifullmod <- data.frame(confint(fulllm),confint(fulllm)[,2]-confint(fulllm)[,1])
+colnames(cifullmod) <- c("F 2.5%","F 97.5%", "F Difference")
+
+cbind(cifullmod,mutatesadjci,mutatesadjci[,3]<cifullmod[,3])
+```
+
+####Question 9 - Summarize your results
+In the end result, the mutated model provides a tighter/better estimate of the coefficients.  This makes sense as the full model is only run once, whereas the mutated model is run 1000 times thus providing a more robust result.  While the distributions of the variables in the mutated model weren't stable, we see that the end result of the mutated model on a whole is a better estimate.  In addition, all the confidence intervals of the coefficients of the mutated model have a smaller range than the full model.
+

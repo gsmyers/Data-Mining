@@ -1,0 +1,407 @@
+
+
+```{r}
+dataPath <- "C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining"
+setwd("C:/Users/Glynis/Documents/MSc A U Chicago/Winter 2017/Data Mining")
+source('kmodes.debugged.txt')
+sflib <- read.csv(paste(dataPath,'Library_Usage.csv',sep = '/'), header=TRUE)
+sflib <- sflib[-c(15)] #removing mostly NA field
+
+
+
+round(quantile(sort(sflib$Total.Checkouts), probs = c(0.25,0.5,0.75)),2)
+```
+
+#creating checkout buckets of low, mid-low, mid-high, high
+```{r}
+
+for(i in 1:length(sflib$Total.Checkouts)){
+  if (sflib$Total.Checkouts[i]>113){
+    sflib$Checkout.cat[i]<-3
+  } else if (sflib$Total.Checkouts[i]>19){
+    sflib$Checkout.cat[i]<-2
+     } else if(sflib$Total.Checkouts[i]>2){
+      sflib$Checkout.cat[i]<-1
+      } else {
+      sflib$Checkout.cat[i]<-0
+    }
+  
+}
+
+```
+
+
+```{r}
+set.seed(10)
+indexes=sort(sample(1:nrow(sflib), size = .01*nrow(sflib)))
+sflibind = sflib[indexes,]
+###### convert the categorical variables to factors
+for(i in 1:14){
+  sflibind[,i] <-as.numeric(factor(sflibind[,i]))
+}
+```
+
+# train and test
+```{r}
+set.seed(10)
+indexes=sort(sample(1:nrow(sflibind), size = .3*nrow(sflibind)))
+Holdout = sflibind[indexes,]
+Train = sflibind[-indexes,]
+```
+
+
+
+#################################################### Linear Regression #############################################################################
+
+
+
+```{r}
+(log.model<- glm(formula = Total.Checkouts ~.-Checkout.cat, family = gaussian,
+                 data = Train))
+
+#summary of full model showing predictors with highly significant p values
+summary(log.model)
+
+```
+
+
+```{r}
+#finding lowest AIC among all variables
+aic<- numeric(13)
+for (i in 1:13){
+  glm <- glm(formula = Total.Checkouts ~ Train[,i], family = gaussian,
+             data = Train)
+  aic[i] <- glm$aic
+}
+
+aic
+#full model still has lowest AIC 
+
+#aic for the full model 
+log.model$aic
+```
+
+
+```{r}
+#running step AIC to find main effect variables
+require("poLCA")
+stepAIC(log.model,direction = "both")
+```
+
+
+```{r}
+#building a "main" model using only predictors from lowest stepAIC
+(log.model.main <- glm(formula = Total.Checkouts ~ Patron.Type.Definition + Total.Renewals + 
+    Age.Range + Home.Library.Code + Home.Library.Definition + 
+    Circulation.Active.Month + Circulation.Active.Year + Notice.Preference.Code + 
+    Provided.Email.Address + Year.Patron.Registered + Outside.of.County, 
+    family = gaussian, data = Train))
+summary(log.model.main)
+
+```
+
+
+```{r}
+#Circulation Active Year, Total Renewals and Age have a positive correlation with Total Checkouts
+#PRovided Email address , the year they registers, and if you live outside the county have a negative correlation
+
+#aic for the best model
+log.model.main$aic
+
+#trying to find a decent viz represenation of the findings 
+plot(log.model.main)
+hist(log.model.main$residuals)
+
+plot(log.model$residuals)
+```
+
+
+#################################################### Logistic Regression #############################################################################
+
+```{r}
+library("nnet")
+(log.model<- glm(formula = Checkout.cat ~.-Total.Checkouts, data = Train))
+
+#summary of full model showing predictors with highly significant p values
+summary(log.model)
+
+```
+
+
+```{r}
+#finding lowest AIC among all variables
+aic<- numeric(13)
+for (i in 1:13){
+  glm <- glm(formula = Checkout.cat ~ Train[,i], family = gaussian,
+             data = Train)
+  aic[i] <- glm$aic
+}
+
+aic
+#full model still has lowest AIC 
+
+#aic for the full model 
+log.model$aic
+```
+
+
+```{r}
+#running step AIC to find main effect variables
+require("poLCA")
+stepAIC(log.model,direction = "both")
+```
+
+
+```{r}
+#building a "main" model using only predictors from lowest stepAIC
+(log.model.main <- glm(formula = Checkout.cat ~ Patron.Type.Code + Patron.Type.Definition + 
+    Total.Renewals + Age.Range + Home.Library.Code + Home.Library.Definition + 
+    Circulation.Active.Month + Circulation.Active.Year + Notice.Preference.Code + 
+    Provided.Email.Address + Year.Patron.Registered + Outside.of.County, data=Train))
+summary(log.model.main)
+
+```
+
+
+```{r}
+#Circulation Active Year, Total Renewals and Age have a positive correlation with Total Checkouts
+#PRovided Email address , the year they registers, and if you live outside the county have a negative correlation
+
+#aic for the best model
+log.model.main$aic
+
+#trying to find a decent viz represenation of the findings 
+plot(log.model.main)
+hist(log.model.main$residuals)
+
+plot(log.model$residuals)
+```
+
+
+
+```{r}
+predicts <- log.model.main$linear.predictors
+predicts[predicts>=2.5]=3
+predicts[predicts>=1.5&predicts<2.5]=2
+predicts[predicts>=0.5&predicts<1.5]=1
+predicts[predicts<0.5]=0
+
+head(predicts)
+round(prop.table(table(Train$Checkout.cat,predicts),1),2)
+
+```
+######################################################      Tree     ##############################################################################
+
+```{r}
+require(rpart)
+treemod <- rpart(formula = Checkout.cat~.-Total.Checkouts, method = "class",data = Train,control=rpart.control(cp=0,minsplit=15,xval=10, maxsurrogate = 0))
+par(mai=c(0.1,0.1,0.1,0.1))
+plot(treemod,main="Classification Tree",col=3, compress=TRUE, branch=0.2,uniform=TRUE)
+text(treemod,use.n=FALSE, all=TRUE, cex=.8)
+```
+
+
+```{r}
+printcp(treemod)
+plotcp(treemod,minline=TRUE,col=4)
+bestcp <- treemod$cptable[which.min(treemod$cptable[,"xerror"]),"CP"]
+tree.pruned1 <- prune(treemod, cp = bestcp)
+
+par(mai=c(0.1,0.1,0.1,0.1))
+plot(tree.pruned1,main="Classification Tree",col=3, compress=TRUE, branch=0.2,uniform=TRUE)
+text(tree.pruned1,use.n=FALSE, all=TRUE, cex=.8)
+```
+
+
+```{r}
+
+tree.pruned <- prune(treemod, cp = 0.00136737)
+
+par(mai=c(0.1,0.1,0.1,0.1))
+plot(tree.pruned,main="Classification Tree",col=3, compress=TRUE, branch=0.2,uniform=TRUE)
+text(tree.pruned,use.n=FALSE, all=TRUE, cex=.8)
+```
+
+
+```{r}
+#using pruned tree
+table(Train$Checkout.cat,predict(tree.pruned,type="class"))
+(trainconf2 <- round(prop.table(table(Train$Checkout.cat,predict(tree.pruned,type="class")),1),2))       #row level #deparse laabel - labeling # accuracy
+round(prop.table(table(Train$Checkout.cat,predict(tree.pruned,type="class")),2),2)        #column level #better split but why? # efficiency
+
+```
+
+##holdout validation
+```{r}
+treeholdoutpredict <- predict(tree.pruned,newdata=Holdout,type="class")
+
+table(Holdout$Checkout.cat,treeholdoutpredict)
+(holdconf2 <- round(prop.table(table(Holdout$Checkout.cat,treeholdoutpredict),1),2) )
+round(prop.table(table(Holdout$Checkout.cat,treeholdoutpredict),2),2) 
+
+```
+
+
+######################################################  Kmeans / Kmodes  ##############################################################################
+
+```{r}
+round(quantile(sort(sflib$Total.Renewals),probs = c(0.25,0.5,0.75)),2)
+```
+
+```{r}
+
+for(i in 1:length(sflib $Total.Renewals)){
+  if (sflib $Total.Renewals[i]>27){
+    sflib $Renewals.cat[i]<-3
+  } else if (sflib $Total.Renewals[i]>2){
+    sflib $Renewals.cat[i]<-2
+     } else if(sflib $Total.Renewals[i]>0){
+      sflib $Renewals.cat[i]<-1
+      } else {
+      sflib $Renewals.cat[i]<-0
+    }
+  
+}
+
+```
+
+
+CHOSING VARIABLES
+```{r}
+kmodes.dat <- data.frame(Train[,-c(3,4)])
+```
+
+FUNCTIONS
+```{r}
+kmodes.sol.one <- kmodes(kmodes.dat,nclust = 2, nloops = 30, seed = 123121)
+
+kmodes.sol.two <- kmodes(kmodes.dat,nclust = 4, nloops = 30, seed = 123121)
+
+kmodes.sol.thr <- kmodes(kmodes.dat,nclust = 6, nloops = 30, seed = 123121)
+
+kmodes.sol.fou <- kmodes(kmodes.dat,nclust = 8, nloops = 30, seed = 123121)
+
+kmodes.sol.fiv <- kmodes(kmodes.dat,nclust = 10, nloops = 30, seed = 123121)
+
+kmodes.sol.six <- kmodes(kmodes.dat,nclust = 12, nloops = 30, seed = 123121)
+
+kmodes.sol.sev <- kmodes(kmodes.dat,nclust = 14, nloops = 30, seed = 123121)
+
+kmodes.sol.eig <- kmodes(kmodes.dat,nclust = 16, nloops = 30, seed = 123121)
+
+kmodes.sol.nin <- kmodes(kmodes.dat,nclust = 18, nloops = 30, seed = 123121)
+
+kmodes.sol.ten <- kmodes(kmodes.dat,nclust = 20, nloops = 30, seed = 123121)
+```
+
+OUTPUTS
+```{r}
+kmodes.sol.one$MAF
+```
+
+```{r}
+kmodes.sol.two$MAF
+```
+
+```{r}
+kmodes.sol.thr$MAF
+```
+
+```{r}
+kmodes.sol.fou$MAF
+```
+
+```{r}
+kmodes.sol.fiv$MAF
+```
+
+```{r}
+kmodes.sol.six$MAF
+```
+
+```{r}
+kmodes.sol.sev$MAF
+```
+
+```{r}
+kmodes.sol.eig$MAF
+```
+
+```{r}
+kmodes.sol.nin$MAF
+```
+
+```{r}
+kmodes.sol.ten$MAF
+```
+
+```{r}
+kmodes.dat.o <- data.frame(Train[,-c(15,16)])
+```
+
+```{r}
+kmodes.sol.one.o <- kmodes(kmodes.dat.o,nclust = 2, nloops = 30, seed = 123121)
+
+kmodes.sol.two.o <- kmodes(kmodes.dat.o,nclust = 4, nloops = 30, seed = 123121)
+
+kmodes.sol.thr.o <- kmodes(kmodes.dat.o,nclust = 6, nloops = 30, seed = 123121)
+
+kmodes.sol.fou.o <- kmodes(kmodes.dat.o,nclust = 8, nloops = 30, seed = 123121)
+
+kmodes.sol.fiv.o <- kmodes(kmodes.dat.o,nclust = 10, nloops = 30, seed = 123121)
+
+kmodes.sol.six.o <- kmodes(kmodes.dat.o,nclust = 12, nloops = 30, seed = 123121)
+
+kmodes.sol.sev.o <- kmodes(kmodes.dat.o,nclust = 14, nloops = 30, seed = 123121)
+
+kmodes.sol.eig.o <- kmodes(kmodes.dat.o,nclust = 16, nloops = 30, seed = 123121)
+
+kmodes.sol.nin.o <- kmodes(kmodes.dat.o,nclust = 18, nloops = 30, seed = 123121)
+
+kmodes.sol.ten.o <- kmodes(kmodes.dat.o,nclust = 20, nloops = 30, seed = 123121)
+```
+
+```{r}
+kmodes.sol.one.o$MAF
+kmodes.sol.two.o$MAF
+kmodes.sol.thr.o$MAF
+kmodes.sol.fou.o$MAF
+kmodes.sol.fiv.o$MAF
+kmodes.sol.six.o$MAF
+kmodes.sol.sev.o$MAF
+kmodes.sol.eig.o$MAF
+kmodes.sol.nin.o$MAF
+kmodes.sol.ten.o$MAF
+```
+
+```{r}
+clust <- c(2,4,6,8,10,12,14,16,18,20)
+y.lim <- c(.45,.45,.45,.45,.45,.45,.45,.45,.45,.7)
+Original.KM.MAF <- c(kmodes.sol.one.o$MAF,
+kmodes.sol.two.o$MAF,
+kmodes.sol.thr.o$MAF,
+kmodes.sol.fou.o$MAF,
+kmodes.sol.fiv.o$MAF,
+kmodes.sol.six.o$MAF,
+kmodes.sol.sev.o$MAF,
+kmodes.sol.eig.o$MAF,
+kmodes.sol.nin.o$MAF,
+kmodes.sol.ten.o$MAF)
+
+Adjusted.KM.MAF <- c(kmodes.sol.one$MAF,
+kmodes.sol.two$MAF,
+kmodes.sol.thr$MAF,
+kmodes.sol.fou$MAF,
+kmodes.sol.fiv$MAF,
+kmodes.sol.six$MAF,
+kmodes.sol.sev$MAF,
+kmodes.sol.eig$MAF,
+kmodes.sol.nin$MAF,
+kmodes.sol.ten$MAF)
+
+plot(clust,y.lim,col="white", xlab = "Clusters", ylab = "Matches Accounted For")
+lines(clust,Original.KM.MAF, col = 2, type = "l")
+lines(clust,Adjusted.KM.MAF, col = 4)
+
+```
+
